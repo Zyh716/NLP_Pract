@@ -1,11 +1,13 @@
 import torch
 import torch.utils.data
 import argparse
-from tqdm import tdqm
+from tqdm import tqdm
 
-from dataset import coffate_fn, TranslationDataset
-from Translator import Translator
-from preprocess import read_instances_from_file, build_vocab_idx, convert_instance_to_idx_seq
+from dataset import collate_fn, TranslationDataset
+from transformer.Translator import Translator
+from preprocess import read_instances_from_file, convert_instance_to_idx_seq
+
+#pass
 
 def main():
     parser = argparse.ArgumentParser()
@@ -52,8 +54,8 @@ def main():
     with open(opt.output, 'w') as f:
         for batch in tqdm(test_loader, mininterval=2, desc='  - (Test)', leave=False):
             all_hyp, all_scores = translator.translate_batch(*batch)
-            for hyp in all_hyp:
-                for scores in all_scores:
+            for hyp_stream in all_hyp:
+                for hyp in hyp_stream:
                     pred_sent = ' '.join([test_loader.dataset.tgt_idx2word[idx] for idx in hyp])
                     f.write(pred_sent + '\n')
     print('[Info] Finished')

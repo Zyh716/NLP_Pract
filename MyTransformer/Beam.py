@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import Constants as Constants
 
-class Beam():
+class Beam():#seem pass
     def __init__(self, size, device=False):
         self.size = size
         self._done = False
@@ -13,7 +13,7 @@ class Beam():
         self.score_father = []
 
         self.all_word_id = [torch.full((size,), Constants.PAD, dtype=torch.long, device=device)]
-        self.all_word_id [0][0] = Constants.BOS
+        self.all_word_id[0][0] = Constants.BOS
 
     def get_current_state(self):
         return self.get_tentative_hypothesis()
@@ -43,7 +43,7 @@ class Beam():
 
         beam_id = best_size_scores_id / n_vocab
         self.score_father.append(beam_id)
-        self.next_ys.append(best_size_scores_id - beam_id*n_vocab)
+        self.all_word_id.append(best_size_scores_id - beam_id*n_vocab)
 
         if self.all_word_id[-1][0] == Constants.EOS:
             self._done = True
@@ -63,16 +63,16 @@ class Beam():
             hyp_stream_list = self.all_word_id[0].unsqueeze(1)
         else:
             _, ids = self.sort_scores()
-            hyp_stream_list = [self.get_hyp_stream_from_one_final_scores(k) for k in ids]
+            hyp_stream_list = [self.get_hypothesis(k) for k in ids]
             hyp_stream_list = [[Constants.BOS] + hsl for hsl in hyp_stream_list]
             hyp_stream_list = torch.LongTensor(hyp_stream_list)
 
         return hyp_stream_list
 
-    def get_hyp_stream_from_one_final_scores(self, k):
+    def get_hypothesis(self, k):
         hyp_stream = []
-        for i in range(len(self.all_word_id) -1, -1, -1):
+        for i in range(len(self.score_father)-1, -1, -1):
             hyp_stream.append(self.all_word_id[i+1][k])
             k = self.score_father[i][k]
 
-        return hyp_stream
+        return list(map(lambda x: x.item(), hyp_stream[::-1]))

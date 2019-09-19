@@ -1,3 +1,4 @@
+#main有问题
 import argparse
 import math
 import time
@@ -12,14 +13,15 @@ from dataset import TranslationDataset, paired_collate_fn
 from Modules import Transformer
 from Modules import ScheduledOptim
 
-def prepare_dataloaders(data, opt):
+def prepare_dataloaders(data, opt):#pass
+    #把一个dataset封装进prepare_dataloaders里面,dataset 有seq(bh, lens)  有word2idx 有idx2word
     train_loader = torch.utils.data.DataLoader(
         TranslationDataset(
             src_word2idx=data['dict']['src'],
             tgt_word2idx=data['dict']['tgt'],
             src_insts=data['train']['src'],
             tgt_insts=data['train']['tgt']),
-        num_worders=2,
+        num_workers=2,
         batch_size = opt.batch_size,
         collate_fn=paired_collate_fn,
         shuffle=True
@@ -31,29 +33,29 @@ def prepare_dataloaders(data, opt):
             tgt_word2idx=data['dict']['tgt'],
             src_insts=data['valid']['src'],
             tgt_insts=data['valid']['tgt']),
-        num_worders=2,
+        num_workers=2,
         batch_size=opt.batch_size,
-        collate_fn=paired_collate_fn,
-        shuffle=True
+        collate_fn=paired_collate_fn
     )
     return train_loader, valid_loader
 
 
-def cal_performance(pred, gold, smoothing=Flase):
+def cal_performance(pred, gold, smoothing=False):#pass
     loss = cal_loss(pred, gold, smoothing)
 
     pred = pred.max(1)[1]
-    gold = gold.contigugous().view(-1)
+    gold = gold.contiguous().view(-1)
     non_pad_mask = gold.ne(Constants.PAD)
     n_correct = gold.eq(pred)
-    n_correct = n_correct.mask_select(non_pad_mask).sum().item()
+    n_correct = n_correct.masked_select(non_pad_mask).sum().item()
 
     return loss, n_correct
 
-def cal_loss(pred, gold, smoothing):
-    ##看不懂
-    gold = gold.view(-1)
-    if smoothing:
+def cal_loss(pred, gold, smoothing):#pass
+
+    gold = gold.contiguous().view(-1)
+
+    if smoothing:   ##看不懂
         eps = +0.1
         n_class = pred.size(1)
 
@@ -69,7 +71,7 @@ def cal_loss(pred, gold, smoothing):
 
     return loss
 
-def train_epoch(model, training_data, optimizer, device, smoothing):
+def train_epoch(model, training_data, optimizer, device, smoothing):#pass
     model.train()
 
     total_loss = 0
@@ -80,7 +82,7 @@ def train_epoch(model, training_data, optimizer, device, smoothing):
             training_data, mininterval=2,
             desc='  - (Training)   ', leave=False):
         src_seq, src_pos, tgt_seq, tgt_pos = map(lambda x: x.to(device), batch)
-        gold = tgt_seq[:, 1:]  # 威慑么要
+        gold = tgt_seq[:, 1:]
 
         optimizer.zero_grad()
         pred = model(src_seq, src_pos, tgt_seq, tgt_pos)
@@ -101,14 +103,14 @@ def train_epoch(model, training_data, optimizer, device, smoothing):
     accuracy = n_word_correct / n_word_total
     return loss_per_word, accuracy
 
-def eval_epoch(model, validation_data, device):
+def eval_epoch(model, validation_data, device):#pass
     model.eval()
 
     total_loss = 0
     n_word_total = 0
     n_word_correct = 0
 
-    with model.no_grad():
+    with torch.no_grad():
         for batch in tqdm(validation_data, mininterval=2, desc='  - (Validation) ', leave=False):
             src_seq, src_pos, tgt_seq, tgt_pos = map(lambda x: x.to(device), batch)
             gold = tgt_seq[:, 1:]
@@ -123,11 +125,11 @@ def eval_epoch(model, validation_data, device):
             n_word_correct += n_correct
             n_word_total += n_word
 
-    loss_per_word = total_loss / n_word
+    loss_per_word = total_loss / n_word_total
     accuracy = n_word_correct / n_word_total
     return loss_per_word, accuracy
 
-def train(model, training_data, validation, optimizer, device, opt):
+def train(model, training_data, validation, optimizer, device, opt): #pass
 
     log_train_file = None
     log_valid_file = None
@@ -137,6 +139,7 @@ def train(model, training_data, validation, optimizer, device, opt):
         log_valid_file = opt.log + '.valid.log'
 
         print('[Info] Training performanace will be written to file: {} and {}'.format(log_train_file, log_valid_file))
+
         with open(log_train_file, 'w') as log_tf, open(log_valid_file, 'a') as log_vf:
             log_tf.write('epoch,loss,ppl,accuracy\n')
             log_vf.write('epoch,loss,ppl,accuracy\n')
@@ -146,7 +149,7 @@ def train(model, training_data, validation, optimizer, device, opt):
         print('[Epoch', epoch, ']')
 
         start = time.time()
-        train_loss, train_accu = train_epoch(model, training_data, optimizer, device, opt.smoothing)
+        train_loss, train_accu = train_epoch(model, training_data, optimizer, device, opt.label_smoothing)
         print('  -(Training)   ppl: {ppl: 8.5f}, accuracy: {accu: 3.3f} %, '\
               'elapse: {elapse: 3.3f} min'.format(
                 ppl=math.exp(min(100, train_loss)),
@@ -154,14 +157,14 @@ def train(model, training_data, validation, optimizer, device, opt):
                 elapse=(time.time()-start)/60))
 
         start = time.time()
-        valid_loss, valid_accu = eval_epoch(model, validation, optimizer, device)
+        valid_loss, valid_accu = eval_epoch(model, validation, device)
         print('  -(Validation)   ppl: {ppl: 8.5f}, accuracy: {accu: 3.3f} %, ' \
               'elapse: {elapse: 3.3f} min'.format(
             ppl=math.exp(min(100, valid_loss)),
             accu=train_accu * 100,
             elapse=(time.time() - start) / 60))
 
-        valid_accus.append(valid_accus)
+        valid_accus += [valid_accu]
 
         model_state_dict = model.state_dict()
         check_point = {
@@ -185,13 +188,14 @@ def train(model, training_data, validation, optimizer, device, opt):
                     epoch = epoch,
                     loss=train_loss,
                     ppl=math.exp(min(100, train_loss)),
-                    accu = train_accu*100)
+                    accu = train_accu*100))
                 log_vf.write('{epoch},{loss: 8.5f},{ppl: 8.5f},{accu: 3.3f}\n'.format(
                     epoch=epoch,
                     loss=valid_loss,
                     ppl=math.exp(min(100, valid_loss)),
-                    accu=valid_accu * 100)
-def main():
+                    accu=valid_accu * 100))
+
+def main():#有问题
     parser = argparse.ArgumentParser()
 
     parser.add_argument('-data', required=True)
@@ -247,7 +251,7 @@ def main():
 
     optimizer = ScheduledOptim(
         optim.Adam(
-            filter(lambda x: x.required_grad, transformer.parameters()),
+            filter(lambda x: x.requires_grad, transformer.parameters()),
             betas=(0.9, 0.98), eps=1e-09),
         opt.d_model, opt.n_warmup_steps)
 

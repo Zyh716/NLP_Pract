@@ -1,7 +1,7 @@
 import numpy as np
 
 
-class ScheduledOptim():
+class ScheduledOptim():#pass
     '''三个功能，获得学习率、更新学习率、两者都做'''
     def __init__(self, optimizer, d_model, n_warmup_steps):
         self.optimizer = optimizer
